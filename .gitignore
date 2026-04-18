@@ -1,0 +1,49 @@
+# ── Build output ──
+build/
+out/
+
+# ── Logs ──
+build_log.txt
+log.txt
+*.log
+
+# ── Paddle Inference (downloaded, ~1GB) ──
+paddle_inference_prod/
+paddle_inference.zip
+
+# ── vcpkg (submodule or local clone, build artifacts) ──
+vcpkg/buildtrees/
+vcpkg/downloads/
+vcpkg/installed/
+vcpkg/packages/
+vcpkg/vcpkg.exe
+
+# ── Runtime config (user-specific) ──
+config.json
+
+# ── IDE / Editor ──
+.vs/
+.vscode/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.db
+*.opendb
+*.ipch
+
+# ── OS ──
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ── Compiler / Object files ──
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+!src/**

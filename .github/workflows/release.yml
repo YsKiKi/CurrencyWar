@@ -1,0 +1,97 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Bootstrap vcpkg
+        run: .\vcpkg\bootstrap-vcpkg.bat
+        shell: cmd
+
+      - name: Install vcpkg dependencies
+        run: |
+          .\vcpkg\vcpkg.exe install opencv4:x64-windows nlohmann-json:x64-windows qtbase:x64-windows --classic
+        shell: cmd
+
+      - name: Download Paddle Inference
+        shell: pwsh
+        run: |
+          $url = "https://paddle-inference-lib.bj.bcebos.com/3.0.0/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
+          Write-Host "Downloading Paddle Inference..."
+          Invoke-WebRequest -Uri $url -OutFile paddle_inference.zip -UseBasicParsing
+          Write-Host "Extracting..."
+          Expand-Archive -Path paddle_inference.zip -DestinationPath . -Force
+          # The archive extracts to paddle_inference/ — rename to paddle_inference_prod/
+          if (Test-Path "paddle_inference") {
+            Rename-Item "paddle_inference" "paddle_inference_prod"
+          }
+          Remove-Item paddle_inference.zip -Force
+
+      - name: CMake Configure
+        shell: pwsh
+        run: |
+          cmake -B build -S . `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_MANIFEST_MODE=OFF `
+            -DCMAKE_PREFIX_PATH="$PWD/vcpkg/installed/x64-windows" `
+            -DPADDLE_INFERENCE_DIR="$PWD/paddle_inference_prod"
+
+      - name: CMake Build
+        run: cmake --build build --config Release
+
+      - name: Package Release
+        shell: pwsh
+        run: |
+          $stageDir = "CurrencyWar"
+          New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+
+          # Copy all DLLs and EXE
+          Copy-Item "build\Release\*.exe" $stageDir
+          Copy-Item "build\Release\*.dll" $stageDir
+
+          # Copy subdirectories (platforms/, styles/, res/)
+          $subdirs = @("platforms", "styles", "res")
+          foreach ($dir in $subdirs) {
+            $src = "build\Release\$dir"
+            if (Test-Path $src) {
+              Copy-Item $src "$stageDir\$dir" -Recurse
+            }
+          }
+
+          # Remove user-specific config from release
+          $cfg = "$stageDir\config.json"
+          if (Test-Path $cfg) { Remove-Item $cfg }
+
+          Compress-Archive -Path "$stageDir\*" -DestinationPath "CurrencyWar-${{ github.ref_name }}.zip"
+
+      - name: Get tag commit message
+        id: tag_message
+        shell: pwsh
+        run: |
+          $msg = git tag -l --format='%(contents)' "${{ github.ref_name }}"
+          if (-not $msg) { $msg = git log -1 --format='%B' }
+          # Write to GITHUB_OUTPUT (multi-line safe)
+          $escaped = $msg -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'
+          "body=$escaped" | Out-File -Append -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: ${{ steps.tag_message.outputs.body }}
+          files: CurrencyWar-${{ github.ref_name }}.zip

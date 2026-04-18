@@ -1,0 +1,10 @@
+{
+  "name": "currency-war",
+  "version": "1.0.0",
+  "description": "CurrencyWar automation for Honkai: Star Rail",
+  "dependencies": [
+    "opencv4",
+    "nlohmann-json",
+    "qtbase"
+  ]
+}
