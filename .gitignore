@@ -21,6 +21,9 @@ vcpkg/vcpkg.exe
 # ── Runtime config (user-specific) ──
 config.json
 
+# ── CMake user presets (local paths, not for commit) ──
+CMakeUserPresets.json
+
 # ── IDE / Editor ──
 .vs/
 .vscode/

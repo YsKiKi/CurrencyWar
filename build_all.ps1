@@ -1,7 +1,9 @@
 # build_all.ps1 - Full background build script
-# Usage: .\build_all.ps1 [-Proxy "http://127.0.0.1:7890"]
+# Usage: .\build_all.ps1 [-Proxy "http://127.0.0.1:7890"] [-CI]
+#   -CI: Cloud/CI mode, always install all deps via vcpkg (no interactive prompts)
 param(
-    [string]$Proxy = ""
+    [string]$Proxy = "",
+    [switch]$CI = $false
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -77,17 +79,67 @@ while ($true) {
 }
 Log "No vcpkg processes running. Proceeding..."
 
-Log "Step 1: Installing opencv4 + nlohmann-json..."
-& $vcpkg install opencv4:x64-windows nlohmann-json:x64-windows --classic 2>&1 | Tee-Object -Append -FilePath $logFile
-if ($LASTEXITCODE -ne 0) {
-    Log "WARNING: opencv4/nlohmann-json install returned $LASTEXITCODE"
+# ── Detect local OpenCV / Qt from CMakeUserPresets.json ──
+$localOpenCV = ""
+$localQt     = ""
+$userPresetsFile = "$root\CMakeUserPresets.json"
+if ((-not $CI) -and (Test-Path $userPresetsFile)) {
+    try {
+        $presets = Get-Content $userPresetsFile -Raw | ConvertFrom-Json
+        $localPreset = $presets.configurePresets | Where-Object { $_.name -eq "local" }
+        if ($localPreset -and $localPreset.cacheVariables) {
+            $localOpenCV = $localPreset.cacheVariables.LOCAL_OPENCV_DIR -replace '/','\' 
+            $localQt     = $localPreset.cacheVariables.LOCAL_QT_DIR -replace '/','\'
+        }
+    } catch {
+        Log "WARNING: Failed to parse CMakeUserPresets.json: $_"
+    }
+}
+$useLocalOpenCV = $localOpenCV -and (Test-Path "$localOpenCV\OpenCVConfig.cmake")
+$useLocalQt     = $localQt -and (Test-Path "$localQt\lib\cmake\Qt6\Qt6Config.cmake")
+
+if ($useLocalOpenCV) { Log "Detected local OpenCV: $localOpenCV" }
+if ($useLocalQt)     { Log "Detected local Qt: $localQt" }
+
+# ── Determine which packages vcpkg needs to install ──
+$vcpkgPackages = @("nlohmann-json:x64-windows")
+
+if (-not $useLocalOpenCV) {
+    if ($CI) {
+        Log "CI mode: will install opencv4 via vcpkg"
+        $vcpkgPackages += 'opencv4[png,jpeg,webp,tiff]:x64-windows'
+    } else {
+        Log "Local OpenCV not found at $localOpenCV"
+        $answer = Read-Host "Install opencv4 via vcpkg? This may take a long time. [y/N]"
+        if ($answer -match '^[Yy]') {
+            $vcpkgPackages += 'opencv4[png,jpeg,webp,tiff]:x64-windows'
+        } else {
+            Log "ERROR: OpenCV is required. Please install it or set the correct path."
+            exit 1
+        }
+    }
 }
 
-Log "Step 2: Installing qtbase..."
-& $vcpkg install qtbase:x64-windows --classic 2>&1 | Tee-Object -Append -FilePath $logFile
+if (-not $useLocalQt) {
+    if ($CI) {
+        Log "CI mode: will install qtbase via vcpkg"
+        $vcpkgPackages += "qtbase:x64-windows"
+    } else {
+        Log "Local Qt not found at $localQt"
+        $answer = Read-Host "Install qtbase via vcpkg? This may take a long time. [y/N]"
+        if ($answer -match '^[Yy]') {
+            $vcpkgPackages += "qtbase:x64-windows"
+        } else {
+            Log "ERROR: Qt is required. Please install it or set the correct path."
+            exit 1
+        }
+    }
+}
+
+Log "Step 1: Installing vcpkg packages: $($vcpkgPackages -join ', ')..."
+& $vcpkg install @vcpkgPackages --classic 2>&1 | Tee-Object -Append -FilePath $logFile
 if ($LASTEXITCODE -ne 0) {
-    Log "ERROR: qtbase install failed with exit code $LASTEXITCODE"
-    exit 1
+    Log "WARNING: vcpkg install returned $LASTEXITCODE"
 }
 
 # ── Step 2.5: Download Paddle Inference if not present ──
@@ -132,13 +184,19 @@ if (Test-Path "$paddleDir\paddle\lib\paddle_inference.lib") {
 } else {
     Log "WARNING: paddle_inference_prod not found, will use stub"
 }
-$cmakeArgs = @(
-    "-B", "$root\build", "-S", "$root",
-    "-DCMAKE_TOOLCHAIN_FILE=$root\vcpkg\scripts\buildsystems\vcpkg.cmake",
-    "-G", "Visual Studio 17 2022", "-A", "x64",
-    "-DVCPKG_MANIFEST_MODE=OFF",
-    "-DCMAKE_PREFIX_PATH=$root\vcpkg\installed\x64-windows"
-)
+
+# Use CMake presets if available, fall back to manual args
+$presetName = ""
+if ($useLocalOpenCV -or $useLocalQt) {
+    # local preset (from CMakeUserPresets.json)
+    $presetName = "local"
+    Log "CMake: using preset 'local'"
+} else {
+    $presetName = "default"
+    Log "CMake: using preset 'default' (vcpkg)"
+}
+
+$cmakeArgs = @("--preset", $presetName)
 if ($paddleCmakeArg) {
     $cmakeArgs += $paddleCmakeArg
 }
@@ -150,7 +208,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Log "Step 5: Building (Release)..."
-& $cmake --build "$root\build" --config Release 2>&1 | Tee-Object -Append -FilePath $logFile
+& $cmake --build --preset $presetName 2>&1 | Tee-Object -Append -FilePath $logFile
 
 if ($LASTEXITCODE -ne 0) {
     Log "ERROR: Build failed with exit code $LASTEXITCODE"
