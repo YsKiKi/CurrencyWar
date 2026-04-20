@@ -2,7 +2,7 @@
 
 > 前提情要：  
 > 由于作者游玩HSR时被高难度货币战争的逆天环境吓哭，遂与AI合作开发此工具，帮助自己和其他玩家自动刷取理想的投资环境。
-> 此版本通过C++重写，减少了[Python版本](https://github.com/YsKiKi/AutoCurrencyWar)过于笨重的问题，并对GUI相关逻辑进行了优化。
+> 此版本通过C++重写，减少了 Python 版本过于笨重的问题，并对GUI相关逻辑进行了优化。
 
 HSR「货币战争」自动刷取工具。通过 PaddleOCR 识别投资环境与 Debuff，自动循环进入 → 识别 → 筛选 → 退出重开，直到匹配目标策略后停止并通知。
 
@@ -23,16 +23,27 @@ HSR「货币战争」自动刷取工具。通过 PaddleOCR 识别投资环境与
 > - 本工具中的button图片为2560x1440分辨率截图，如果你的设备使用不同分辨率，建议自行截图替换 `res/buttons/` 目录下对应的图片
 > - 请勿修改对应的图片命名，否则程序将无法识别按钮状态
 
-克隆仓库到本地  
+#### 从 Releases 下载
+访问 [Releases](https://github.com/YsKiKi/CurrencyWar_Cpp/releases/latest) ，下载最新版本的 `CurrencyWar.zip`，解压后运行 `CurrencyWar.exe`
+
+
+#### 自行编译
+1. 将本仓库克隆到本地：
 ```bash
-git clone https://github.com/YsKiKi/AutoCurrencyWar.git
+git clone https://github.com/YsKiKi/CurrencyWar_Cpp.git
 ```
+2. 安装依赖项：
+   - C++17 编译器（如 Visual Studio 2022）
+   - CMake 3.20+
+   - OpenCV 4.5+
+   - PaddleOCR C++ 库
+   - Qt6（可选，用于 GUI）
+3. 运行 `build_all.ps1` 脚本进行编译，生成 `build/` 目录，运行编译完成的 `CurrencyWar.exe`
 
 #### 运行流程
-1. 运行 `build_all.ps1` 编译程序，生成 `build/` 目录，运行编译完成的 `CurrencyWar.exe`
-2. 选择目标策略和Debuff
-3. 切换标签页，设置OCR识别次数，框选识别区域，配置快捷键
-4. 启动！
+1. 选择目标策略和Debuff。  
+2. 切换标签页，设置OCR识别次数，框选识别区域，配置快捷键。
+3. 启动！
 
 
 > [!NOTE]
