@@ -49,3 +49,6 @@ Desktop.ini
 /build/**/*.lib
 /build/**/*.dll
 /build/**/*.exe
+
+# —— Update Tools ——
+update_res.py
